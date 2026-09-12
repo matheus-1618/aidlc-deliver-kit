@@ -1,0 +1,103 @@
+# AI-DLC Deliver — teardown auditado
+#
+# Três gatilhos: botão manual, TTL noturno (rede de segurança contra recurso
+# esquecido) e workflow_dispatch disparado pela plataforma (intent de
+# decommission via GitHub MCP).
+#
+# O job FALHA se a auditoria por tag encontrar QUALQUER recurso remanescente —
+# "destruído" aqui significa provado-zero, não prometido.
+
+name: destroy-production
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * *"   # 03:00 -03 — TTL: derruba o que passou da validade
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: __AWS_REGION__
+  DEPLOY_ROLE_ARN: __DEPLOY_ROLE_ARN__
+  TFSTATE_BUCKET: __TFSTATE_BUCKET__
+  PROJECT_TAG: __ENV_TAG__
+
+jobs:
+  destroy:
+    name: "Teardown + auditoria por tag"
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume deploy role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Guard — infra existe?
+        id: guard
+        run: |
+          if [ ! -f infra/main.tf ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: TTL check (só no cron)
+        if: github.event_name == 'schedule' && steps.guard.outputs.skip == 'false'
+        id: ttl
+        working-directory: infra
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TFSTATE_BUCKET}" \
+            -backend-config="key=${{ github.repository }}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}"
+          # Sem state ou sem recursos = nada a destruir
+          COUNT=$(terraform state list 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$COUNT" = "0" ]; then
+            echo "expired=false" >> "$GITHUB_OUTPUT"
+            echo "State vazio — nada de pé."
+          else
+            # Cron noturno destrói INCONDICIONALMENTE o que estiver de pé:
+            # ambiente de demo não atravessa a madrugada.
+            echo "expired=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Terraform destroy
+        if: steps.guard.outputs.skip == 'false' && (github.event_name == 'workflow_dispatch' || steps.ttl.outputs.expired == 'true')
+        working-directory: infra
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TFSTATE_BUCKET}" \
+            -backend-config="key=${{ github.repository }}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" 2>/dev/null || true
+          terraform destroy -input=false -auto-approve
+
+      - name: Auditoria por tag — tem que voltar ZERO
+        if: steps.guard.outputs.skip == 'false' && (github.event_name == 'workflow_dispatch' || steps.ttl.outputs.expired == 'true')
+        run: |
+          sleep 20   # janela de propagação do tagging API
+          LEFT=$(aws resourcegroupstaggingapi get-resources \
+            --tag-filters "Key=Project,Values=${PROJECT_TAG}" \
+            --query 'length(ResourceTagMappingList)' --output text)
+          echo "Recursos remanescentes com tag Project=${PROJECT_TAG}: ${LEFT}"
+          if [ "$LEFT" != "0" ]; then
+            aws resourcegroupstaggingapi get-resources \
+              --tag-filters "Key=Project,Values=${PROJECT_TAG}" \
+              --query 'ResourceTagMappingList[].ResourceARN' --output text
+            echo "::error::Teardown INCOMPLETO — recursos listados acima."
+            exit 1
+          fi
+          echo '## Teardown ✅ — auditoria: 0 recursos remanescentes' >> "$GITHUB_STEP_SUMMARY"
