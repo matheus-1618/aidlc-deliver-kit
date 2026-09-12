@@ -1,0 +1,118 @@
+# AI-DLC Deliver — pipeline de deploy (flavor: static-site)
+#
+# Gate de produção: este workflow só roda em push na MAIN — e a main só recebe
+# merge pelo release-gate do intent na plataforma AI-DLC. A credencial é OIDC:
+# nenhum segredo de nuvem vive no GitHub nem na plataforma.
+#
+# Saídas: job summary legível + deploy-outputs.json (artifact) que a stage
+# deploy-verify do intent lê via GitHub MCP para materializar o
+# environment-manifest no grafo da plataforma.
+
+name: deploy-production
+
+on:
+  push:
+    branches: [main]
+    paths: ["infra/**", "__SITE_DIR__/**"]
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write   # OIDC
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: __AWS_REGION__
+  DEPLOY_ROLE_ARN: __DEPLOY_ROLE_ARN__
+  TFSTATE_BUCKET: __TFSTATE_BUCKET__
+  SITE_DIR: __SITE_DIR__
+
+jobs:
+  deploy:
+    name: "Production deploy (gated pela plataforma)"
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume deploy role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Guard — infra existe?
+        id: guard
+        run: |
+          if [ ! -f infra/main.tf ]; then
+            echo "infra/main.tf ausente — nada a deployar ainda (repo pré-intent)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Terraform apply
+        if: steps.guard.outputs.skip == 'false'
+        working-directory: infra
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TFSTATE_BUCKET}" \
+            -backend-config="key=${{ github.repository }}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}"
+          terraform apply -input=false -auto-approve
+
+      - name: Publish site content
+        if: steps.guard.outputs.skip == 'false'
+        working-directory: infra
+        run: |
+          BUCKET=$(terraform output -raw site_bucket)
+          DIST=$(terraform output -raw distribution_id)
+          aws s3 sync "../${SITE_DIR}/" "s3://${BUCKET}/" --delete
+          aws cloudfront create-invalidation --distribution-id "$DIST" --paths "/*" > /dev/null
+
+      - name: Emit deploy outputs (consumidos pela stage deploy-verify)
+        if: steps.guard.outputs.skip == 'false'
+        working-directory: infra
+        run: |
+          URL=$(terraform output -raw site_url)
+          cat > /tmp/deploy-outputs.json <<EOF
+          {
+            "status": "deployed",
+            "url": "${URL}",
+            "site_bucket": "$(terraform output -raw site_bucket)",
+            "distribution_id": "$(terraform output -raw distribution_id)",
+            "commit": "${{ github.sha }}",
+            "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "deployed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          echo '## Production deploy ✅' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/deploy-outputs.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload deploy-outputs artifact
+        if: steps.guard.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-outputs
+          path: /tmp/deploy-outputs.json
+
+      - name: Smoke test — site responde?
+        if: steps.guard.outputs.skip == 'false'
+        working-directory: infra
+        run: |
+          URL=$(terraform output -raw site_url)
+          for i in $(seq 1 20); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$URL" || true)
+            [ "$CODE" = "200" ] && { echo "OK: $URL -> 200"; exit 0; }
+            sleep 15
+          done
+          echo "FALHOU: $URL nunca respondeu 200"; exit 1
