@@ -35,6 +35,22 @@ Preencha esta tabela. TODOS os passos referenciam estes nomes em
 Ferramentas na máquina: `git`, `gh` (autenticado: `gh auth status`),
 `terraform >= 1.5`, `aws` CLI com credencial da conta, `python3`.
 
+### Passo 0.5 — Rode o preflight (2 min; NÃO pule)
+
+O preflight converte toda suposição deste walkthrough em PASS/FAIL — inclusive
+**se a versão da sua plataforma tem as rotas que o kit consome** (a causa nº 1
+de falha no meio do caminho é vanilla antigo). Rode com as variáveis do Passo 0:
+
+```bash
+export AIDLC_API=... USER_POOL_ID=... CLIENT_ID=... AWS_REGION=... \
+       ADMIN_EMAIL=... ADMIN_PASSWORD=... GITHUB_REPO=<GITHUB_ORG>/<GITHUB_REPO>
+./scripts/preflight.sh
+```
+
+✅ **Checkpoint**: `0 fail`. Qualquer FAIL vem com a ação corretiva na linha —
+resolva antes do Passo 1. (Se acusar rotas ausentes na plataforma: atualize o
+deployment para o upstream `main` >= set/2026 via `install.sh update`.)
+
 ---
 
 ## Passo 1 — Clone o kit e faça o bootstrap da conta (5 min)
