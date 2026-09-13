@@ -34,6 +34,24 @@ O princípio que guia toda decisão de integração:
 
 ## 2. Mapa de encaixe — "eu já tenho X"
 
+### 2.0 Antes de tudo: o que o kit EXIGE vs o que é SUBSTITUÍVEL
+
+O kit não impõe a sua esteira nem a sua estrutura de repo — ele impõe um
+CONTRATO. Leia esta tabela antes de decidir o que adaptar:
+
+| Peça | Obrigatória? | Nota |
+|---|---|---|
+| Os workflows `deploy.yml`/`destroy.yml` do kit | ❌ substituíveis | Mantenha o contrato da §2.3; a implementação é sua |
+| Estrutura de repo (`site/`, `infra/`, `backend/`) | ❌ é o flavor | Autore o SEU flavor com os seus padrões (§2.4) |
+| Repo novo / greenfield | ❌ | Brownfield coberto (§2.5) |
+| Bucket de tfstate do kit | ❌ | Use o seu (§2.6) |
+| Role/OIDC do bootstrap | ❌ | Reuse os seus (§2.1/§2.2) |
+| GitHub como provider de git | ✅ hoje | MCP, merge e observação são do GitHub (github.com ou GHES §2.8) |
+| Deploy observável como run do **GitHub Actions** | ⚠️ hoje sim | A stage deploy-execute assiste o deploy pela API do Actions. Esteira real em CodePipeline/outro? Um wrapper fino de Actions que dispara-e-espera resolve (§2.3 ponto 2). SEM Actions nenhum: o desenho suporta trocar (stage é dado, MCP é config) — custo: um MCP que enxergue a sua esteira + ajustar os prompts de deploy-execute/deploy-verify. O kit não entrega essa variante pronta |
+| Os 2 gates humanos (release, ack final) | ✅ por desenho | É o produto: decisão registrada. Não automatize |
+| Manifest + sensores blocking | ✅ por desenho | É o que separa "deployou" de "provou" |
+
+
 ### 2.1 "Já tenho OIDC provider do GitHub na conta"
 
 Comum (só pode existir UM `token.actions.githubusercontent.com` por conta).
