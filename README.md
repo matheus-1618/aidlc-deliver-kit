@@ -5,6 +5,11 @@ verificado em produção, com cada decisão, execução e evidência rastreada
 dentro do intent. Provado ponta a ponta em 2026-09-11 (site no ar, sensor
 blocking PASS, teardown auditado a zero).
 
+> **Vai encaixar no que você já tem deployado?** Leia o
+> [Guia de Integração](docs/INTEGRATION.md) — cenários de adaptação (OIDC/role/
+> esteira/IaC existentes), tabela completa de variáveis e segredos (PAT), e a
+> verificação prova-de-vida de cada etapa.
+
 ## A esteira
 
 ```
