@@ -5,6 +5,11 @@ verificado em produção, com cada decisão, execução e evidência rastreada
 dentro do intent. Provado ponta a ponta em 2026-09-11 (site no ar, sensor
 blocking PASS, teardown auditado a zero).
 
+> **Tem o sample vanilla deployado e quer subir isto do zero?** Siga o
+> [Walkthrough](docs/WALKTHROUGH.md) — passo a passo imperativo (rode isso,
+> espere aquilo, você acabou de criar X), executável por você ou pelo seu
+> assistente de IA.
+>
 > **Vai encaixar no que você já tem deployado?** Leia o
 > [Guia de Integração](docs/INTEGRATION.md) — cenários de adaptação (OIDC/role/
 > esteira/IaC existentes), tabela completa de variáveis e segredos (PAT), e a
