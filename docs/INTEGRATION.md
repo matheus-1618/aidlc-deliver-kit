@@ -5,6 +5,10 @@ o kit nelas?"**. Ele complementa o README (que descreve a instalação limpa)
 com os cenários de adaptação, a tabela completa de variáveis e segredos, e a
 verificação de cada etapa.
 
+> **Instalação limpa passo a passo** (sample vanilla → primeiro deploy):
+> [WALKTHROUGH.md](WALKTHROUGH.md). Este guia aqui é a REFERÊNCIA de
+> adaptação; o walkthrough é o SCRIPT.
+
 O princípio que guia toda decisão de integração:
 
 > **A plataforma decide e registra; o SEU mecanismo de deploy executa; a SUA
