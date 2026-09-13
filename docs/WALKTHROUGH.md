@@ -15,6 +15,31 @@ Se algo falhar, o passo aponta a seção de troubleshooting do
 > Adaptações (já tenho OIDC/role/esteira/GitHub App/IaC próprios) NÃO estão
 > aqui — este é o caminho limpo. Para encaixes, use o INTEGRATION.md §2.
 
+## Se você é um assistente de IA executando este documento
+
+Contrato de execução — siga à risca:
+
+1. **Colete o Passo 0 com o humano ANTES de qualquer comando.** Não invente
+   valor de placeholder; se faltar um, pergunte. Substitua `<MAIUSCULAS>` em
+   TODA ocorrência (os comandos não fazem isso por você).
+2. **Nunca pule o preflight (0.5).** Um FAIL nele encerra a execução: reporte
+   a linha e a ação corretiva; não "tente mesmo assim".
+3. **Execute os passos em ordem e pare em cada ✅ Checkpoint.** Checkpoint não
+   confere = pare, mostre a saída real vs a esperada, e siga o ponteiro de
+   troubleshooting do passo. Não improvise correção fora do documento sem
+   avisar o humano do desvio.
+4. **Devolva ao humano o que é dele**: os passos de UI (3a, 5) e TODOS os
+   gates do intent — especialmente o release-gate, que é decisão de produção.
+   Você prepara, o humano decide.
+5. **Nunca imprima segredos** (PAT, senha, tokens) em respostas ou logs; use-os
+   apenas dentro dos comandos.
+6. **Não toque em `.github/workflows/` depois do Passo 2**, não rode
+   `workflow_dispatch` do deploy por fora, e não responda gates via API sem
+   pedido explícito — o intent conduz o deploy; intervenção externa corrompe a
+   trilha que é o propósito do fluxo.
+7. Comandos deste doc são idempotentes ou têm guarda; em dúvida sobre re-rodar
+   algo fora deles, pergunte.
+
 ---
 
 ## Passo 0 — Colete estes valores antes de começar
