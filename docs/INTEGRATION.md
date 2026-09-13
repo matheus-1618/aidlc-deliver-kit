@@ -116,7 +116,35 @@ Use o seu: pule o bucket do bootstrap e aponte `__TFSTATE_BUCKET__` para ele.
 A key é namespaced por repo (`<org>/<repo>/terraform.tfstate`), então um
 bucket compartilhado não colide.
 
-### 2.7 "Uso GitHub Enterprise Server (on-prem)"
+### 2.7 "Minha plataforma integra com o GitHub via GitHub App"
+
+Cenário comum — e são DUAS camadas independentes:
+
+**O git da plataforma** (clone, push de branches, engine): continua no App,
+como já está. O kit não toca nessa integração. Lembrete operacional: alterar
+permissões do App NÃO as aplica às instalações existentes — aceite a mudança
+em `github.com/settings/installations`.
+
+**O MCP do fluxo deliver** (PR + Actions): o header do MCP é um bearer
+ESTÁTICO lido do SSM — e installation token de App expira em 1h. Três saídas:
+
+| Opção | Quando | Como |
+|---|---|---|
+| Fine-grained PAT (§3.3) | Org permite PATs (App e PAT coexistem) | O caminho do kit, sem mudança |
+| Machine user + PAT | Org restringe PAT pessoal | Usuário de serviço com acesso só ao(s) repo(s) do fluxo |
+| Rotator do token do App | Org exige "tudo via App" | Lambda agendada (~50 min) gera o installation token com a private key do App e rotaciona via `PUT .../custom-mcp-servers/secrets` (API já existe; tokens de App funcionam no MCP — é REST por baixo, e `workflow_dispatch`/re-run aceitam App com `actions: write`) |
+
+Permissões do App, se for a rota 3: Contents RW, Pull requests RW, Actions RW
+no(s) repo(s) do fluxo.
+
+**Branch protection** (quase certa em org com App): `merge_pull_request`
+respeita as protections — reviews/checks pendentes fazem o merge falhar e a
+stage parkeia com o motivo. Não é conflito: o gate da plataforma decide o
+RELEASE; as protections garantem os REQUISITOS do merge. Alinhe as duas
+camadas para a demo (ex.: check do Actions como required + gate da plataforma
+como decisão).
+
+### 2.8 "Uso GitHub Enterprise Server (on-prem)"
 
 O MCP remoto (`api.githubcopilot.com`) atende github.com. Para GHES, o
 caminho é o [github-mcp-server](https://github.com/github/github-mcp-server)
